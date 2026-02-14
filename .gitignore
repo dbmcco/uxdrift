@@ -1,0 +1,17 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+# Local env/secrets
+.env
+
+# uv / virtualenv
+.venv/
+
+# Tool outputs
+.uxrift/
