@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -38,6 +39,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     run.add_argument("--channel", help='Browser channel (e.g. "chrome"). If unavailable, falls back.')
     run.add_argument("--nav-timeout-ms", type=int, default=15_000)
     run.add_argument("--wait-until", default="domcontentloaded", choices=["load", "domcontentloaded", "networkidle"])
+    run.add_argument("--steps", help="JSON file with Playwright interaction steps to run after load")
     run.add_argument("--goal", action="append", default=[], help="Goal text (repeatable)")
     run.add_argument("--goals-file", action="append", default=[], help="File with goals/spec (repeatable)")
     run.add_argument("--non-goal", action="append", default=[], help="Non-goal text (repeatable)")
@@ -178,6 +180,14 @@ def _run(args: argparse.Namespace) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     pages = args.page or ["/"]
+    steps = None
+    if args.steps:
+        raw = Path(args.steps).read_text(encoding="utf-8")
+        parsed = json.loads(raw)
+        if not isinstance(parsed, list):
+            raise ValueError("--steps must be a JSON array")
+        steps = parsed
+
     ev_pages, run_meta = capture_pages(
         base_url=args.url,
         pages=pages,
@@ -187,6 +197,7 @@ def _run(args: argparse.Namespace) -> int:
         browser_channel=args.channel,
         nav_timeout_ms=int(args.nav_timeout_ms),
         wait_until=args.wait_until,
+        steps=steps,
     )
 
     goals = _collect_goals(args.goal, args.goals_file)
@@ -197,7 +208,16 @@ def _run(args: argparse.Namespace) -> int:
         api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("UXRIFT_LLM_API_KEY")
         if not api_key:
             raise ValueError("LLM enabled but OPENAI_API_KEY (or UXRIFT_LLM_API_KEY) is not set.")
-        screenshot_paths = [Path(p.artifacts["screenshot"]) for p in ev_pages if p.artifacts.get("screenshot")]
+        screenshot_paths: list[Path] = []
+        for p in ev_pages:
+            step_shots = p.artifacts.get("step_screenshots")
+            if isinstance(step_shots, list):
+                for s in step_shots:
+                    if isinstance(s, str) and s:
+                        screenshot_paths.append(Path(s))
+            shot = p.artifacts.get("screenshot")
+            if isinstance(shot, str) and shot:
+                screenshot_paths.append(Path(shot))
         evidence_for_llm = {
             "meta": run_meta,
             "deterministic_counts": {

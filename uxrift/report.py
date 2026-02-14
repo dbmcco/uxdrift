@@ -130,6 +130,10 @@ def render_markdown(report: dict[str, Any]) -> str:
         artifacts = p.get("artifacts", {})
         if artifacts.get("screenshot"):
             lines.append(f"- Screenshot: `{artifacts.get('screenshot')}`")
+        step_shots = artifacts.get("step_screenshots")
+        if isinstance(step_shots, list) and step_shots:
+            for s in step_shots[:20]:
+                lines.append(f"- Step screenshot: `{s}`")
         timing = p.get("timing_ms", {})
         if timing.get("navigation") is not None:
             lines.append(f"- Navigation: `{timing.get('navigation')}ms`")
@@ -186,4 +190,3 @@ def build_report(
         "llm": llm_block or {"enabled": False},
     }
     return report
-

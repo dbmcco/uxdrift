@@ -1,0 +1,17 @@
+[
+  { "action": "wait_for", "selector": "[data-testid=\"workspace-content\"]", "state": "visible", "timeout_ms": 15000 },
+  { "action": "screenshot", "name": "home" },
+
+  { "action": "click", "selector": "button[aria-label=\"Settings\"]" },
+  { "action": "sleep", "ms": 150 },
+  { "action": "screenshot", "name": "settings-open" },
+
+  { "action": "press", "key": "Meta+k" },
+  { "action": "wait_for", "selector": "[role=\"dialog\"][aria-label=\"Command palette\"]", "first": true, "state": "visible", "timeout_ms": 5000 },
+  { "action": "screenshot", "name": "command-palette" },
+  { "action": "press", "key": "Escape" },
+
+  { "action": "click", "role": "tab", "name": "Workboard" },
+  { "action": "sleep", "ms": 150 },
+  { "action": "screenshot", "name": "workboard" }
+]

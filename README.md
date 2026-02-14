@@ -24,6 +24,9 @@ cd uxrift
 # Evidence + LLM critique (OpenAI-compatible; expects OPENAI_API_KEY in env/.env)
 ./bin/uxrift run --url http://localhost:3000 --llm
 
+# Run a small interaction flow (clicks, waits, extra screenshots)
+./bin/uxrift run --url http://localhost:3000 --steps steps.json
+
 # Create GitHub follow-up issues (optional; uses gh CLI auth)
 ./bin/uxrift run --url http://localhost:3000 --llm --create-issues --github-repo owner/repo
 ```
