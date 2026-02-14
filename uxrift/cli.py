@@ -14,6 +14,8 @@ from uxrift.github import create_issue
 from uxrift.llm.critique import critique as llm_critique
 from uxrift.playwright_runner import capture_pages
 from uxrift.report import build_report, render_markdown, write_json, write_text
+from uxrift.workgraph import choose_task_id, find_workgraph_dir, load_workgraph
+from uxrift.wg_spec import load_uxrift_spec_from_description
 
 
 class ExitCode:
@@ -59,12 +61,52 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     install.add_argument("--with-deps", action="store_true", help="Install OS deps too (recommended on Linux CI)")
     install.add_argument("--browser", default="chromium", choices=["chromium", "firefox", "webkit"])
 
+    wg = sub.add_parser("wg", help="Workgraph integration (log results + create follow-up tasks)")
+    wg.add_argument("--dir", help="Path to .workgraph directory (default: search upward from cwd)")
+    wg_sub = wg.add_subparsers(dest="wg_cmd", required=True)
+
+    wg_check = wg_sub.add_parser("check", help="Run uxrift for a workgraph task")
+    wg_check.add_argument("--task", help="Workgraph task id (default: choose the only open/in-progress task)")
+    wg_check.add_argument("--url", help="Base URL (overrides task spec if present)")
+    wg_check.add_argument("--page", action="append", default=[], help="Path to capture (repeatable). Default: from task spec or /")
+    wg_check.add_argument("--out", help="Output dir (default: .workgraph/.uxrift/runs/<timestamp>/<task_id>)")
+    wg_check.add_argument("--headful", action="store_true", help="Run with a visible browser window")
+    wg_check.add_argument("--browser", default="chromium", choices=["chromium", "firefox", "webkit"])
+    wg_check.add_argument("--channel", help='Browser channel (e.g. "chrome"). If unavailable, falls back.')
+    wg_check.add_argument("--nav-timeout-ms", type=int, default=15_000)
+    wg_check.add_argument("--wait-until", default="domcontentloaded", choices=["load", "domcontentloaded", "networkidle"])
+    wg_check.add_argument("--steps", help="JSON file with Playwright interaction steps (overrides task spec)")
+    wg_check.add_argument("--goal", action="append", default=[], help="Goal text (repeatable)")
+    wg_check.add_argument("--goals-file", action="append", default=[], help="File with goals/spec (repeatable)")
+    wg_check.add_argument("--non-goal", action="append", default=[], help="Non-goal text (repeatable)")
+    wg_check.add_argument(
+        "--llm",
+        action="store_true",
+        default=None,
+        help="Enable LLM critique (overrides task spec if present)",
+    )
+    wg_check.add_argument("--llm-base-url", default=os.environ.get("UXRIFT_LLM_BASE_URL", "https://api.openai.com/v1"))
+    wg_check.add_argument("--llm-model", default=os.environ.get("UXRIFT_LLM_MODEL", "gpt-4o-mini"))
+    wg_check.add_argument("--write-log", action="store_true", help="Write a one-line summary to wg log")
+    wg_check.add_argument("--create-followups", action="store_true", help="Create a deterministic ux follow-up task")
+    wg_check.add_argument(
+        "--followup-threshold",
+        default="high",
+        choices=["blocker", "high", "medium", "low", "info"],
+        help="Minimum severity to create a follow-up task (default: high)",
+    )
+
     return p.parse_args(argv)
 
 
 def _default_out_dir(project_dir: Path) -> Path:
     ts = time.strftime("%Y%m%d-%H%M%S")
     return project_dir / ".uxrift" / "runs" / ts
+
+
+def _default_wg_out_dir(wg_dir: Path, task_id: str) -> Path:
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    return wg_dir / ".uxrift" / "runs" / ts / task_id
 
 
 def _read_text_file(path: Path) -> str:
@@ -290,6 +332,283 @@ def _run(args: argparse.Namespace) -> int:
     return ExitCode.ok
 
 
+def _highest_severity(report: dict[str, Any]) -> str:
+    best = "info"
+    for f in (report.get("deterministic_findings") or []):
+        sev = str(f.get("severity") or "info")
+        if _SEV_ORDER.get(sev, 0) > _SEV_ORDER.get(best, 0):
+            best = sev
+    llm_parsed = (report.get("llm") or {}).get("parsed") or {}
+    for f in (llm_parsed.get("findings") or []):
+        sev = str(f.get("severity") or "info")
+        if _SEV_ORDER.get(sev, 0) > _SEV_ORDER.get(best, 0):
+            best = sev
+    return best
+
+
+def _score_from_severity(sev: str) -> str:
+    if sev in ("blocker", "high"):
+        return "red"
+    if sev in ("medium", "low"):
+        return "yellow"
+    return "green"
+
+
+def _counts_from_report(report: dict[str, Any]) -> dict[str, int]:
+    pages = report.get("pages") or []
+    console_errors = 0
+    http_errors = 0
+    request_failures = 0
+    page_errors = 0
+    for p in pages:
+        console_errors += int((p.get("console") or {}).get("counts", {}).get("error", 0))
+        http_errors += int((p.get("network") or {}).get("counts", {}).get("http_errors", 0))
+        request_failures += int((p.get("network") or {}).get("counts", {}).get("request_failures", 0))
+        page_errors += int(len(p.get("page_errors") or []))
+    return {
+        "console_errors": console_errors,
+        "http_errors": http_errors,
+        "request_failures": request_failures,
+        "page_errors": page_errors,
+    }
+
+
+def _maybe_write_wg_log(*, wg, task_id: str, report_md: Path, report: dict[str, Any]) -> None:
+    sev = _highest_severity(report)
+    score = _score_from_severity(sev)
+    counts = _counts_from_report(report)
+    try:
+        rel = report_md.relative_to(wg.project_dir)
+        report_ref = str(rel)
+    except Exception:
+        report_ref = str(report_md)
+
+    msg = (
+        f"uxrift: {score} (sev={sev} "
+        f"console_err={counts['console_errors']} http_err={counts['http_errors']} "
+        f"req_fail={counts['request_failures']} page_err={counts['page_errors']})"
+        f" | report: {report_ref}"
+    )
+    wg.wg_log(task_id, msg)
+
+
+def _maybe_create_wg_followup(*, wg, task_id: str, report_md: Path, report: dict[str, Any], threshold: str) -> None:
+    sev = _highest_severity(report)
+    if not _sev_at_least(sev, threshold):
+        return
+
+    origin = wg.tasks.get(task_id) or {}
+    title = str(origin.get("title") or task_id)
+    follow_id = f"uxrift-ux-{task_id}"
+    follow_title = f"ux: {title}"
+
+    counts = _counts_from_report(report)
+    det = report.get("deterministic_findings") or []
+    llm_parsed = (report.get("llm") or {}).get("parsed") or {}
+    llm_findings = llm_parsed.get("findings") or []
+
+    try:
+        rel = report_md.relative_to(wg.project_dir)
+        report_ref = str(rel)
+    except Exception:
+        report_ref = str(report_md)
+
+    lines = [
+        "UX follow-up (generated by uxrift).",
+        "",
+        f"Origin: {task_id}",
+        f"Report: {report_ref}",
+        "",
+        "Counts:",
+        f"- console_errors: {counts['console_errors']}",
+        f"- http_errors: {counts['http_errors']}",
+        f"- request_failures: {counts['request_failures']}",
+        f"- page_errors: {counts['page_errors']}",
+        "",
+    ]
+
+    if det:
+        lines += ["Deterministic findings:"]
+        for f in det[:20]:
+            lines.append(f"- [{f.get('severity')}] {f.get('category')}: {f.get('summary')}")
+        lines.append("")
+
+    if llm_findings:
+        lines += ["LLM findings:"]
+        for f in llm_findings[:20]:
+            lines.append(f"- [{f.get('severity')}] {f.get('category')}: {f.get('summary')}")
+        lines.append("")
+
+    wg.ensure_task(
+        task_id=follow_id,
+        title=follow_title,
+        description="\n".join(lines).rstrip() + "\n",
+        blocked_by=[task_id],
+        tags=["uxrift", "ux"],
+    )
+
+
+def _wg_check(args: argparse.Namespace) -> int:
+    uxrift_project_dir = Path(__file__).resolve().parent.parent
+    load_default_dotenv(project_dir=uxrift_project_dir)
+
+    wg_dir = find_workgraph_dir(Path(args.dir) if args.dir else None)
+    wg = load_workgraph(wg_dir)
+
+    task_id = str(args.task) if args.task else choose_task_id(wg)
+    task = wg.tasks.get(task_id)
+    if not task:
+        raise ValueError(f"Task not found in graph.jsonl: {task_id}")
+
+    spec = load_uxrift_spec_from_description(str(task.get("description") or "")) or {}
+
+    base_url = args.url or spec.get("url")
+    if not base_url:
+        raise ValueError("--url is required (or set `url = \"...\"` in the task's ```uxrift``` block).")
+
+    pages = args.page
+    if not pages:
+        spec_pages = spec.get("pages")
+        if isinstance(spec_pages, list) and spec_pages:
+            pages = [str(p) for p in spec_pages]
+        else:
+            pages = ["/"]
+
+    steps_path = args.steps or spec.get("steps")
+    steps = None
+    if steps_path:
+        steps_file = Path(str(steps_path))
+        if not steps_file.is_absolute():
+            steps_file = wg.project_dir / steps_file
+        raw = steps_file.read_text(encoding="utf-8")
+        parsed = json.loads(raw)
+        if not isinstance(parsed, list):
+            raise ValueError("steps file must be a JSON array")
+        steps = parsed
+
+    out_dir = Path(args.out) if args.out else _default_wg_out_dir(wg_dir, task_id)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    ev_pages, run_meta = capture_pages(
+        base_url=str(base_url),
+        pages=pages,
+        out_dir=out_dir,
+        headful=bool(args.headful),
+        browser=args.browser,
+        browser_channel=args.channel,
+        nav_timeout_ms=int(args.nav_timeout_ms),
+        wait_until=args.wait_until,
+        steps=steps,
+    )
+    run_meta["task_id"] = task_id
+    run_meta["task_title"] = str(task.get("title") or task_id)
+
+    goals: list[str] = []
+    spec_goals = spec.get("goals")
+    if isinstance(spec_goals, list):
+        goals.extend([str(g) for g in spec_goals if str(g).strip()])
+    goals.extend(_collect_goals(args.goal, args.goals_file))
+
+    non_goals: list[str] = []
+    spec_non = spec.get("non_goals")
+    if isinstance(spec_non, list):
+        non_goals.extend([str(g) for g in spec_non if str(g).strip()])
+    non_goals.extend([g.strip() for g in (args.non_goal or []) if g.strip()])
+
+    # Decide LLM enablement: CLI flag wins; otherwise use task spec.
+    llm_enabled = bool(args.llm) if args.llm is not None else bool(spec.get("llm", False))
+
+    llm_block: dict[str, Any] | None = None
+    if llm_enabled:
+        api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("UXRIFT_LLM_API_KEY")
+        if not api_key:
+            raise ValueError("LLM enabled but OPENAI_API_KEY (or UXRIFT_LLM_API_KEY) is not set.")
+
+        llm_base_url = str(spec.get("llm_base_url") or args.llm_base_url)
+        llm_model = str(spec.get("llm_model") or args.llm_model)
+
+        screenshot_paths: list[Path] = []
+        for p in ev_pages:
+            step_shots = p.artifacts.get("step_screenshots")
+            if isinstance(step_shots, list):
+                for s in step_shots:
+                    if isinstance(s, str) and s:
+                        screenshot_paths.append(Path(s))
+            shot = p.artifacts.get("screenshot")
+            if isinstance(shot, str) and shot:
+                screenshot_paths.append(Path(shot))
+
+        evidence_for_llm = {
+            "meta": run_meta,
+            "deterministic_counts": {
+                "console_errors": sum(int(p.console.get("counts", {}).get("error", 0)) for p in ev_pages),
+                "console_warnings": sum(int(p.console.get("counts", {}).get("warning", 0)) for p in ev_pages),
+                "request_failures": sum(int(p.network.get("counts", {}).get("request_failures", 0)) for p in ev_pages),
+                "http_errors": sum(int(p.network.get("counts", {}).get("http_errors", 0)) for p in ev_pages),
+                "page_errors": sum(len(p.page_errors) for p in ev_pages),
+            },
+            "pages": [
+                {
+                    "name": p.name,
+                    "url": p.url,
+                    "timing_ms": p.timing_ms,
+                    "console_counts": p.console.get("counts"),
+                    "console_error_samples": [
+                        _truncate(str(m.get("text") or ""), 400)
+                        for m in (p.console.get("messages") or [])
+                        if m.get("type") == "error"
+                    ][:10],
+                    "console_warning_samples": [
+                        _truncate(str(m.get("text") or ""), 400)
+                        for m in (p.console.get("messages") or [])
+                        if m.get("type") == "warning"
+                    ][:10],
+                    "network_counts": p.network.get("counts"),
+                    "http_error_samples": (p.network.get("http_errors") or [])[:10],
+                    "request_failure_samples": (p.network.get("request_failures") or [])[:10],
+                    "page_error_count": len(p.page_errors),
+                    "page_error_samples": [_truncate(e, 400) for e in p.page_errors][:10],
+                    "title": p.extracted.get("title"),
+                    "text": p.extracted.get("text"),
+                    "performance_navigation": p.extracted.get("performance_navigation"),
+                    "screenshot": p.artifacts.get("screenshot"),
+                }
+                for p in ev_pages
+            ],
+        }
+        llm_block = llm_critique(
+            base_url=llm_base_url,
+            api_key=api_key,
+            model=llm_model,
+            goals=goals,
+            non_goals=non_goals,
+            evidence=evidence_for_llm,
+            screenshot_paths=screenshot_paths,
+        )
+
+    report = build_report(run_meta=run_meta, pages=ev_pages, goals=goals, non_goals=non_goals, llm_block=llm_block)
+
+    report_json = out_dir / "report.json"
+    report_md = out_dir / "report.md"
+    write_json(report_json, report)
+    write_text(report_md, render_markdown(report))
+
+    if args.write_log:
+        _maybe_write_wg_log(wg=wg, task_id=task_id, report_md=report_md, report=report)
+    if args.create_followups:
+        _maybe_create_wg_followup(
+            wg=wg,
+            task_id=task_id,
+            report_md=report_md,
+            report=report,
+            threshold=str(args.followup_threshold),
+        )
+
+    sev = _highest_severity(report)
+    score = _score_from_severity(sev)
+    return ExitCode.findings if score != "green" else ExitCode.ok
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv or sys.argv[1:])
     try:
@@ -297,6 +616,10 @@ def main(argv: list[str] | None = None) -> int:
             return _install_browsers(args)
         if args.cmd == "run":
             return _run(args)
+        if args.cmd == "wg":
+            if args.wg_cmd == "check":
+                return _wg_check(args)
+            raise ValueError(f"Unknown workgraph command: {args.wg_cmd}")
         raise ValueError(f"Unknown command: {args.cmd}")
     except KeyboardInterrupt:
         return ExitCode.error

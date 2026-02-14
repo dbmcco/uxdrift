@@ -33,6 +33,46 @@ cd uxrift
 
 Outputs land in `.uxrift/runs/<timestamp>/` (JSON + Markdown + screenshots).
 
+## Workgraph + Speedrift Workflow
+
+`uxrift` can attach runs to Workgraph tasks (similar to Speedrift):
+
+```bash
+# From the uxrift repo root (explicit target graph)
+./bin/uxrift wg --dir /path/to/repo/.workgraph check --url http://localhost:3000 --write-log --create-followups
+
+# With an explicit task
+./bin/uxrift wg --dir /path/to/repo/.workgraph check --task <id> --url http://localhost:3000 --write-log
+```
+
+You can also run it from inside the target repo (and omit `--dir`) as long as you call the `uxrift` script by path:
+
+```bash
+cd /path/to/repo
+/path/to/uxrift/bin/uxrift wg check --url http://localhost:3000 --write-log
+```
+
+Default outputs go to `.workgraph/.uxrift/runs/<timestamp>/<task_id>/`.
+
+### Optional per-task spec
+
+In a task description, add:
+
+````md
+```uxrift
+schema = 1
+url = "http://localhost:3000"
+pages = ["/"]
+steps = "path/to/steps.json"
+goals = ["No console errors", "No 404s"]
+non_goals = ["No branding review"]
+llm = true
+llm_model = "gpt-4o-mini"
+```
+````
+
+Then you can omit `--url/--page/--steps/--llm` flags and `uxrift` will use the task spec.
+
 ## Config
 
 For now, the CLI is flag-driven. The next step is a `uxrift.toml` profile format (pages + flows + goals).
@@ -40,4 +80,5 @@ For now, the CLI is flag-driven. The next step is a `uxrift.toml` profile format
 ## Safety
 
 - Secrets live in `.env` (gitignored).
-- `uxrift` never writes to target projects unless you explicitly enable follow-up creation (planned).
+- `uxrift run` is read-only with respect to the target app (it only writes local artifacts).
+- `uxrift wg check --write-log/--create-followups` will write to Workgraph via `wg` and will create artifacts under `.workgraph/.uxrift/`.

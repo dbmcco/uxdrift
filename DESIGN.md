@@ -41,3 +41,12 @@ Single JSON report with:
 - deterministic findings (console/network/page errors)
 - optional LLM critique (structured findings + ideas)
 
+## Workgraph Integration
+
+`uxrift wg check` mirrors the Speedrift pattern:
+
+- finds `.workgraph/graph.jsonl`
+- chooses the current task (open/in-progress)
+- runs capture/critique
+- optionally logs a one-line summary back to the task (`wg log`)
+- optionally creates a deterministic follow-up task (`wg add`) blocked by the origin
