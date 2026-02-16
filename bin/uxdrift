@@ -3,5 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# Run from project root so `python -m uxdrift` resolves package imports
+# even when this wrapper is invoked from another directory.
+cd "$ROOT"
 exec uv run --project "$ROOT" python -m uxdrift "$@"
-
