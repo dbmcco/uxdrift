@@ -1,6 +1,6 @@
 # uxdrift
 
-`uxdrift` is a Speedrift-adjacent sidecar that:
+`uxdrift` is a Speedrift-suite sidecar that:
 
 - drives a real browser (Playwright) to **collect UX evidence** (screenshots, console errors, failed requests)
 - optionally asks an LLM to turn that evidence into **glitch reports, UX improvements, and novel ideas**
@@ -9,6 +9,15 @@ This repo is intentionally opinionated about *pipes vs decisions*:
 
 - Code is a pipe: collect facts, execute flows, save artifacts.
 - Model decides: what matters, why, and what to change next.
+
+## Ecosystem Map
+
+This project is part of the Speedrift suite for Workgraph-first drift control.
+
+- Spine: [Workgraph](https://graphwork.github.io/)
+- Orchestrator: [driftdriver](https://github.com/dbmcco/driftdriver)
+- Baseline lane: [speedrift](https://github.com/dbmcco/speedrift)
+- Optional lanes: [specdrift](https://github.com/dbmcco/specdrift), [datadrift](https://github.com/dbmcco/datadrift), [depsdrift](https://github.com/dbmcco/depsdrift), [uxdrift](https://github.com/dbmcco/uxdrift), [therapydrift](https://github.com/dbmcco/therapydrift), [yagnidrift](https://github.com/dbmcco/yagnidrift), [redrift](https://github.com/dbmcco/redrift)
 
 ## Quickstart
 
