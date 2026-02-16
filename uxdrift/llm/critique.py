@@ -4,9 +4,9 @@ import base64
 from pathlib import Path
 from typing import Any
 
-from uxrift.llm.openai_compat import chat_completions, extract_text
-from uxrift.llm.parse import parse_json_object
-from uxrift.llm.prompt import build_messages
+from uxdrift.llm.openai_compat import chat_completions, extract_text
+from uxdrift.llm.parse import parse_json_object
+from uxdrift.llm.prompt import build_messages
 
 
 def _image_part_from_path(path: Path) -> dict[str, Any]:

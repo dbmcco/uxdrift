@@ -1,5 +1,5 @@
 [project]
-name = "uxrift"
+name = "uxdrift"
 version = "0.1.0"
 description = "Playwright + LLM UX evaluation sidecar (Speedrift-adjacent)"
 readme = "README.md"

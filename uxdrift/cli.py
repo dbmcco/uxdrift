@@ -9,13 +9,13 @@ import sys
 import time
 from typing import Any, Literal
 
-from uxrift.env import load_default_dotenv
-from uxrift.github import create_issue
-from uxrift.llm.critique import critique as llm_critique
-from uxrift.playwright_runner import capture_pages
-from uxrift.report import build_report, render_markdown, write_json, write_text
-from uxrift.workgraph import choose_task_id, find_workgraph_dir, load_workgraph
-from uxrift.wg_spec import load_uxrift_spec_from_description
+from uxdrift.env import load_default_dotenv
+from uxdrift.github import create_issue
+from uxdrift.llm.critique import critique as llm_critique
+from uxdrift.playwright_runner import capture_pages
+from uxdrift.report import build_report, render_markdown, write_json, write_text
+from uxdrift.workgraph import choose_task_id, find_workgraph_dir, load_workgraph
+from uxdrift.wg_spec import load_uxdrift_spec_from_description
 
 
 class ExitCode:
@@ -29,13 +29,13 @@ _SEV_ORDER: dict[str, int] = {"info": 0, "low": 1, "medium": 2, "high": 3, "bloc
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
-    p = argparse.ArgumentParser(prog="uxrift", add_help=True)
+    p = argparse.ArgumentParser(prog="uxdrift", add_help=True)
     sub = p.add_subparsers(dest="cmd", required=True)
 
     run = sub.add_parser("run", help="Run UX capture + optional LLM critique")
     run.add_argument("--url", required=True, help="Base URL, e.g. http://localhost:3000")
     run.add_argument("--page", action="append", default=[], help="Path to capture (repeatable). Default: /")
-    run.add_argument("--out", help="Output dir (default: .uxrift/runs/<timestamp>)")
+    run.add_argument("--out", help="Output dir (default: .uxdrift/runs/<timestamp>)")
     run.add_argument("--headful", action="store_true", help="Run with a visible browser window")
     run.add_argument("--browser", default="chromium", choices=["chromium", "firefox", "webkit"])
     run.add_argument("--channel", help='Browser channel (e.g. "chrome"). If unavailable, falls back.')
@@ -46,8 +46,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     run.add_argument("--goals-file", action="append", default=[], help="File with goals/spec (repeatable)")
     run.add_argument("--non-goal", action="append", default=[], help="Non-goal text (repeatable)")
     run.add_argument("--llm", action="store_true", help="Enable LLM critique (OpenAI-compatible)")
-    run.add_argument("--llm-base-url", default=os.environ.get("UXRIFT_LLM_BASE_URL", "https://api.openai.com/v1"))
-    run.add_argument("--llm-model", default=os.environ.get("UXRIFT_LLM_MODEL", "gpt-4o-mini"))
+    run.add_argument("--llm-base-url", default=os.environ.get("UXDRIFT_LLM_BASE_URL", "https://api.openai.com/v1"))
+    run.add_argument("--llm-model", default=os.environ.get("UXDRIFT_LLM_MODEL", "gpt-4o-mini"))
     run.add_argument("--github-repo", help="Target repo for follow-up issues (e.g. dbmcco/paia-os)")
     run.add_argument("--create-issues", action="store_true", help="Create GitHub issues for notable findings")
     run.add_argument(
@@ -65,11 +65,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     wg.add_argument("--dir", help="Path to .workgraph directory (default: search upward from cwd)")
     wg_sub = wg.add_subparsers(dest="wg_cmd", required=True)
 
-    wg_check = wg_sub.add_parser("check", help="Run uxrift for a workgraph task")
+    wg_check = wg_sub.add_parser("check", help="Run uxdrift for a workgraph task")
     wg_check.add_argument("--task", help="Workgraph task id (default: choose the only open/in-progress task)")
     wg_check.add_argument("--url", help="Base URL (overrides task spec if present)")
     wg_check.add_argument("--page", action="append", default=[], help="Path to capture (repeatable). Default: from task spec or /")
-    wg_check.add_argument("--out", help="Output dir (default: .workgraph/.uxrift/runs/<timestamp>/<task_id>)")
+    wg_check.add_argument("--out", help="Output dir (default: .workgraph/.uxdrift/runs/<timestamp>/<task_id>)")
     wg_check.add_argument("--headful", action="store_true", help="Run with a visible browser window")
     wg_check.add_argument("--browser", default="chromium", choices=["chromium", "firefox", "webkit"])
     wg_check.add_argument("--channel", help='Browser channel (e.g. "chrome"). If unavailable, falls back.')
@@ -85,8 +85,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         default=None,
         help="Enable LLM critique (overrides task spec if present)",
     )
-    wg_check.add_argument("--llm-base-url", default=os.environ.get("UXRIFT_LLM_BASE_URL", "https://api.openai.com/v1"))
-    wg_check.add_argument("--llm-model", default=os.environ.get("UXRIFT_LLM_MODEL", "gpt-4o-mini"))
+    wg_check.add_argument("--llm-base-url", default=os.environ.get("UXDRIFT_LLM_BASE_URL", "https://api.openai.com/v1"))
+    wg_check.add_argument("--llm-model", default=os.environ.get("UXDRIFT_LLM_MODEL", "gpt-4o-mini"))
     wg_check.add_argument("--write-log", action="store_true", help="Write a one-line summary to wg log")
     wg_check.add_argument("--create-followups", action="store_true", help="Create a deterministic ux follow-up task")
     wg_check.add_argument(
@@ -101,12 +101,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 
 def _default_out_dir(project_dir: Path) -> Path:
     ts = time.strftime("%Y%m%d-%H%M%S")
-    return project_dir / ".uxrift" / "runs" / ts
+    return project_dir / ".uxdrift" / "runs" / ts
 
 
 def _default_wg_out_dir(wg_dir: Path, task_id: str) -> Path:
     ts = time.strftime("%Y%m%d-%H%M%S")
-    return wg_dir / ".uxrift" / "runs" / ts / task_id
+    return wg_dir / ".uxdrift" / "runs" / ts / task_id
 
 
 def _read_text_file(path: Path) -> str:
@@ -189,12 +189,12 @@ def _create_followup_issues(*, repo: str, threshold: str, report: dict[str, Any]
             continue
         seen.add(key)
 
-        title = f"[uxrift] {it['category']} ({it['severity']}): {it['summary']}"
+        title = f"[uxdrift] {it['category']} ({it['severity']}): {it['summary']}"
         if len(title) > 120:
             title = title[:119] + "…"
 
         body_lines = [
-            f"Generated by uxrift on `{generated_at}`",
+            f"Generated by uxdrift on `{generated_at}`",
             "",
             f"- Base URL: `{base_url}`",
             f"- Severity: `{it['severity']}`",
@@ -211,7 +211,7 @@ def _create_followup_issues(*, repo: str, threshold: str, report: dict[str, Any]
             for ev in it["evidence"]:
                 body_lines.append(f"- {ev}")
 
-        create_issue(repo=repo, title=title, body="\n".join(body_lines) + "\n", labels=["uxrift"])
+        create_issue(repo=repo, title=title, body="\n".join(body_lines) + "\n", labels=["uxdrift"])
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -247,9 +247,9 @@ def _run(args: argparse.Namespace) -> int:
 
     llm_block: dict[str, Any] | None = None
     if args.llm:
-        api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("UXRIFT_LLM_API_KEY")
+        api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("UXDRIFT_LLM_API_KEY")
         if not api_key:
-            raise ValueError("LLM enabled but OPENAI_API_KEY (or UXRIFT_LLM_API_KEY) is not set.")
+            raise ValueError("LLM enabled but OPENAI_API_KEY (or UXDRIFT_LLM_API_KEY) is not set.")
         screenshot_paths: list[Path] = []
         for p in ev_pages:
             step_shots = p.artifacts.get("step_screenshots")
@@ -384,7 +384,7 @@ def _maybe_write_wg_log(*, wg, task_id: str, report_md: Path, report: dict[str, 
         report_ref = str(report_md)
 
     msg = (
-        f"uxrift: {score} (sev={sev} "
+        f"uxdrift: {score} (sev={sev} "
         f"console_err={counts['console_errors']} http_err={counts['http_errors']} "
         f"req_fail={counts['request_failures']} page_err={counts['page_errors']})"
         f" | report: {report_ref}"
@@ -399,7 +399,7 @@ def _maybe_create_wg_followup(*, wg, task_id: str, report_md: Path, report: dict
 
     origin = wg.tasks.get(task_id) or {}
     title = str(origin.get("title") or task_id)
-    follow_id = f"uxrift-ux-{task_id}"
+    follow_id = f"uxdrift-ux-{task_id}"
     follow_title = f"ux: {title}"
 
     counts = _counts_from_report(report)
@@ -414,7 +414,7 @@ def _maybe_create_wg_followup(*, wg, task_id: str, report_md: Path, report: dict
         report_ref = str(report_md)
 
     lines = [
-        "UX follow-up (generated by uxrift).",
+        "UX follow-up (generated by uxdrift).",
         "",
         f"Origin: {task_id}",
         f"Report: {report_ref}",
@@ -444,13 +444,13 @@ def _maybe_create_wg_followup(*, wg, task_id: str, report_md: Path, report: dict
         title=follow_title,
         description="\n".join(lines).rstrip() + "\n",
         blocked_by=[task_id],
-        tags=["uxrift", "ux"],
+        tags=["uxdrift", "ux"],
     )
 
 
 def _wg_check(args: argparse.Namespace) -> int:
-    uxrift_project_dir = Path(__file__).resolve().parent.parent
-    load_default_dotenv(project_dir=uxrift_project_dir)
+    uxdrift_project_dir = Path(__file__).resolve().parent.parent
+    load_default_dotenv(project_dir=uxdrift_project_dir)
 
     wg_dir = find_workgraph_dir(Path(args.dir) if args.dir else None)
     wg = load_workgraph(wg_dir)
@@ -460,11 +460,11 @@ def _wg_check(args: argparse.Namespace) -> int:
     if not task:
         raise ValueError(f"Task not found in graph.jsonl: {task_id}")
 
-    spec = load_uxrift_spec_from_description(str(task.get("description") or "")) or {}
+    spec = load_uxdrift_spec_from_description(str(task.get("description") or "")) or {}
 
     base_url = args.url or spec.get("url")
     if not base_url:
-        raise ValueError("--url is required (or set `url = \"...\"` in the task's ```uxrift``` block).")
+        raise ValueError("--url is required (or set `url = \"...\"` in the task's ```uxdrift``` block).")
 
     pages = args.page
     if not pages:
@@ -520,9 +520,9 @@ def _wg_check(args: argparse.Namespace) -> int:
 
     llm_block: dict[str, Any] | None = None
     if llm_enabled:
-        api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("UXRIFT_LLM_API_KEY")
+        api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("UXDRIFT_LLM_API_KEY")
         if not api_key:
-            raise ValueError("LLM enabled but OPENAI_API_KEY (or UXRIFT_LLM_API_KEY) is not set.")
+            raise ValueError("LLM enabled but OPENAI_API_KEY (or UXDRIFT_LLM_API_KEY) is not set.")
 
         llm_base_url = str(spec.get("llm_base_url") or args.llm_base_url)
         llm_model = str(spec.get("llm_model") or args.llm_model)

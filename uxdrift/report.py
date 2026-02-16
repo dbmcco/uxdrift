@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from uxrift.playwright_runner import PageEvidence
+from uxdrift.playwright_runner import PageEvidence
 
 
 def _utc_now_iso() -> str:
@@ -72,7 +72,7 @@ def summarize_deterministic_findings(pages: list[PageEvidence]) -> list[dict[str
 
 def render_markdown(report: dict[str, Any]) -> str:
     lines: list[str] = []
-    lines.append("# uxrift report")
+    lines.append("# uxdrift report")
     lines.append("")
 
     meta = report.get("meta", {})

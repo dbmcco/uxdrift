@@ -14,7 +14,7 @@ def build_messages(
     non_goals_text = "\n".join([f"- {g}" for g in non_goals]) if non_goals else "(none provided)"
 
     system = (
-        "You are uxrift, a UX evaluator.\n"
+        "You are uxdrift, a UX evaluator.\n"
         "You will be given goals/non-goals and concrete browser evidence (errors + screenshots + minimal page text).\n"
         "Your job:\n"
         "- Identify glitches, UX issues, and opportunities.\n"

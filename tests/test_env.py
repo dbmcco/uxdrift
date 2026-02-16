@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from uxrift.env import load_dotenv
+from uxdrift.env import load_dotenv
 
 
 class TestEnv(unittest.TestCase):

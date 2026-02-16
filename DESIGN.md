@@ -1,4 +1,4 @@
-# uxrift Design
+# uxdrift Design
 
 ## Goals
 
@@ -22,7 +22,7 @@
   - capture screenshots
   - record console errors, JS page errors, request failures, HTTP 4xx/5xx
 - Artifact writer:
-  - store run metadata + evidence in `.uxrift/runs/<timestamp>/`
+  - store run metadata + evidence in `.uxdrift/runs/<timestamp>/`
 - Optional issue/task emitter (future):
   - create GitHub issues or workgraph follow-up tasks
 
@@ -43,7 +43,7 @@ Single JSON report with:
 
 ## Workgraph Integration
 
-`uxrift wg check` mirrors the Speedrift pattern:
+`uxdrift wg check` mirrors the Speedrift pattern:
 
 - finds `.workgraph/graph.jsonl`
 - chooses the current task (open/in-progress)

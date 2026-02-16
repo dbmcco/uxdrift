@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from uxrift.llm.parse import parse_json_object
+from uxdrift.llm.parse import parse_json_object
 
 
 class TestLLMParse(unittest.TestCase):

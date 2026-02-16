@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from uxrift.cli import main
+from uxdrift.cli import main
 
 
 if __name__ == "__main__":

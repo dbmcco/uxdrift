@@ -4,8 +4,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from uxrift.playwright_runner import PageEvidence
-from uxrift.report import build_report, render_markdown
+from uxdrift.playwright_runner import PageEvidence
+from uxdrift.report import build_report, render_markdown
 
 
 class TestReportMarkdown(unittest.TestCase):
@@ -30,7 +30,7 @@ class TestReportMarkdown(unittest.TestCase):
             llm_block=None,
         )
         md = render_markdown(report)
-        self.assertIn("# uxrift report", md)
+        self.assertIn("# uxdrift report", md)
         self.assertIn("Deterministic Findings", md)
         self.assertIn("Pages", md)
 

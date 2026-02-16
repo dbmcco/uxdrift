@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from uxrift.workgraph import Workgraph, choose_task_id
+from uxdrift.workgraph import Workgraph, choose_task_id
 
 
 class TestChooseTaskId(unittest.TestCase):
