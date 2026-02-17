@@ -22,22 +22,29 @@ This project is part of the Speedrift suite for Workgraph-first drift control.
 ## Quickstart
 
 ```bash
-cd uxdrift
+pipx install git+https://github.com/dbmcco/uxdrift.git
 
 # Optional (Linux CI typically needs this; macOS often works with local Chrome channel)
-./bin/uxdrift install-browsers
+uxdrift install-browsers
 
 # Evidence-only run (no model)
-./bin/uxdrift run --url http://localhost:3000
+uxdrift run --url http://localhost:3000
 
 # Evidence + LLM critique (OpenAI-compatible; expects OPENAI_API_KEY in env/.env)
-./bin/uxdrift run --url http://localhost:3000 --llm
+uxdrift run --url http://localhost:3000 --llm
 
 # Run a small interaction flow (clicks, waits, extra screenshots)
-./bin/uxdrift run --url http://localhost:3000 --steps steps.json
+uxdrift run --url http://localhost:3000 --steps steps.json
 
 # Create GitHub follow-up issues (optional; uses gh CLI auth)
-./bin/uxdrift run --url http://localhost:3000 --llm --create-issues --github-repo owner/repo
+uxdrift run --url http://localhost:3000 --llm --create-issues --github-repo owner/repo
+```
+
+Local clone development shortcut (no pipx needed):
+
+```bash
+cd uxdrift
+./bin/uxdrift run --url http://localhost:3000
 ```
 
 Outputs land in `.uxdrift/runs/<timestamp>/` (JSON + Markdown + screenshots).
@@ -47,18 +54,18 @@ Outputs land in `.uxdrift/runs/<timestamp>/` (JSON + Markdown + screenshots).
 `uxdrift` can attach runs to Workgraph tasks (similar to Speedrift):
 
 ```bash
-# From the uxdrift repo root (explicit target graph)
-./bin/uxdrift wg --dir /path/to/repo/.workgraph check --url http://localhost:3000 --write-log --create-followups
+# From anywhere (explicit target graph)
+uxdrift wg --dir /path/to/repo/.workgraph check --url http://localhost:3000 --write-log --create-followups
 
 # With an explicit task
-./bin/uxdrift wg --dir /path/to/repo/.workgraph check --task <id> --url http://localhost:3000 --write-log
+uxdrift wg --dir /path/to/repo/.workgraph check --task <id> --url http://localhost:3000 --write-log
 ```
 
-You can also run it from inside the target repo (and omit `--dir`) as long as you call the `uxdrift` script by path:
+You can also run it from inside the target repo (and omit `--dir`):
 
 ```bash
 cd /path/to/repo
-/path/to/uxdrift/bin/uxdrift wg check --url http://localhost:3000 --write-log
+uxdrift wg check --url http://localhost:3000 --write-log
 ```
 
 Default outputs go to `.workgraph/.uxdrift/runs/<timestamp>/<task_id>/`.
