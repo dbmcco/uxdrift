@@ -6,6 +6,7 @@ from typing import Any
 
 from uxdrift.llm.openai_compat import chat_completions, extract_text
 from uxdrift.llm.parse import parse_json_object
+from uxdrift.llm.pov import resolve_pov
 from uxdrift.llm.prompt import build_messages
 
 
@@ -24,6 +25,8 @@ def critique(
     non_goals: list[str],
     evidence: dict[str, Any],
     screenshot_paths: list[Path],
+    pov: str | None = None,
+    pov_focus: list[str] | None = None,
 ) -> dict[str, Any]:
     images = []
     # Keep token pressure down: send up to 4 screenshots.
@@ -33,7 +36,8 @@ def critique(
         except Exception:
             continue
 
-    messages = build_messages(goals=goals, non_goals=non_goals, evidence=evidence, images=images)
+    resolved_pov = resolve_pov(pov, pov_focus)
+    messages = build_messages(goals=goals, non_goals=non_goals, evidence=evidence, images=images, pov=resolved_pov)
     resp = chat_completions(base_url=base_url, api_key=api_key, model=model, messages=messages)
     text = extract_text(resp)
     parsed = parse_json_object(text)
@@ -44,6 +48,6 @@ def critique(
         "model": model,
         "raw_text": text,
         "parsed": parsed,
+        "pov": resolved_pov,
         "usage": resp.get("usage"),
     }
-

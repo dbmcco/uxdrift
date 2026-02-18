@@ -45,6 +45,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     run.add_argument("--goal", action="append", default=[], help="Goal text (repeatable)")
     run.add_argument("--goals-file", action="append", default=[], help="File with goals/spec (repeatable)")
     run.add_argument("--non-goal", action="append", default=[], help="Non-goal text (repeatable)")
+    run.add_argument("--pov", help="Reasoning POV pack (e.g. doet-norman-v1)")
+    run.add_argument("--pov-focus", action="append", default=[], help="POV principle id to emphasize (repeatable)")
     run.add_argument("--llm", action="store_true", help="Enable LLM critique (OpenAI-compatible)")
     run.add_argument("--llm-base-url", default=os.environ.get("UXDRIFT_LLM_BASE_URL", "https://api.openai.com/v1"))
     run.add_argument("--llm-model", default=os.environ.get("UXDRIFT_LLM_MODEL", "gpt-4o-mini"))
@@ -79,6 +81,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     wg_check.add_argument("--goal", action="append", default=[], help="Goal text (repeatable)")
     wg_check.add_argument("--goals-file", action="append", default=[], help="File with goals/spec (repeatable)")
     wg_check.add_argument("--non-goal", action="append", default=[], help="Non-goal text (repeatable)")
+    wg_check.add_argument("--pov", help="Reasoning POV pack (overrides task spec if present)")
+    wg_check.add_argument("--pov-focus", action="append", default=[], help="POV principle id to emphasize (repeatable)")
     wg_check.add_argument(
         "--llm",
         action="store_true",
@@ -123,6 +127,10 @@ def _collect_goals(goals: list[str], goal_files: list[str]) -> list[str]:
         if txt:
             out.append(txt)
     return out
+
+
+def _collect_text_values(values: list[str]) -> list[str]:
+    return [v.strip() for v in values if v and v.strip()]
 
 
 def _truncate(s: str, max_chars: int) -> str:
@@ -244,6 +252,11 @@ def _run(args: argparse.Namespace) -> int:
 
     goals = _collect_goals(args.goal, args.goals_file)
     non_goals = [g.strip() for g in (args.non_goal or []) if g.strip()]
+    pov_name = (str(args.pov).strip() if args.pov else None)
+    pov_focus = _collect_text_values(list(args.pov_focus or []))
+    pov_meta: dict[str, Any] | None = None
+    if pov_name:
+        pov_meta = {"name": pov_name, "focus": pov_focus}
 
     llm_block: dict[str, Any] | None = None
     if args.llm:
@@ -306,9 +319,14 @@ def _run(args: argparse.Namespace) -> int:
             non_goals=non_goals,
             evidence=evidence_for_llm,
             screenshot_paths=screenshot_paths,
+            pov=pov_name,
+            pov_focus=pov_focus,
         )
+        resolved = llm_block.get("pov")
+        if isinstance(resolved, dict) and resolved:
+            pov_meta = resolved
 
-    report = build_report(run_meta=run_meta, pages=ev_pages, goals=goals, non_goals=non_goals, llm_block=llm_block)
+    report = build_report(run_meta=run_meta, pages=ev_pages, goals=goals, non_goals=non_goals, llm_block=llm_block, pov=pov_meta)
 
     report_json = out_dir / "report.json"
     report_md = out_dir / "report.md"
@@ -406,6 +424,10 @@ def _maybe_create_wg_followup(*, wg, task_id: str, report_md: Path, report: dict
     det = report.get("deterministic_findings") or []
     llm_parsed = (report.get("llm") or {}).get("parsed") or {}
     llm_findings = llm_parsed.get("findings") or []
+    pov = report.get("pov") or {}
+    pov_name = str(pov.get("name") or "").strip() if isinstance(pov, dict) else ""
+    pov_focus = pov.get("focus") if isinstance(pov, dict) else []
+    scorecard = llm_parsed.get("pov_scorecard") or []
 
     try:
         rel = report_md.relative_to(wg.project_dir)
@@ -427,6 +449,14 @@ def _maybe_create_wg_followup(*, wg, task_id: str, report_md: Path, report: dict
         "",
     ]
 
+    if pov_name:
+        lines += [f"POV: {pov_name}"]
+        if isinstance(pov_focus, list) and pov_focus:
+            focus = [str(x) for x in pov_focus if str(x).strip()]
+            if focus:
+                lines += [f"POV focus: {', '.join(focus)}"]
+        lines.append("")
+
     if det:
         lines += ["Deterministic findings:"]
         for f in det[:20]:
@@ -436,7 +466,24 @@ def _maybe_create_wg_followup(*, wg, task_id: str, report_md: Path, report: dict
     if llm_findings:
         lines += ["LLM findings:"]
         for f in llm_findings[:20]:
-            lines.append(f"- [{f.get('severity')}] {f.get('category')}: {f.get('summary')}")
+            tags = f.get("principle_tags") or []
+            tag_text = ""
+            if isinstance(tags, list):
+                clean = [str(t) for t in tags if str(t).strip()]
+                if clean:
+                    tag_text = f" (principles: {', '.join(clean)})"
+            lines.append(f"- [{f.get('severity')}] {f.get('category')}: {f.get('summary')}{tag_text}")
+        lines.append("")
+
+    if isinstance(scorecard, list) and scorecard:
+        lines += ["POV scorecard:"]
+        for item in scorecard[:20]:
+            if not isinstance(item, dict):
+                continue
+            principle = str(item.get("principle") or "").strip()
+            score = item.get("score")
+            if principle:
+                lines.append(f"- {principle}: {score}")
         lines.append("")
 
     wg.ensure_task(
@@ -515,6 +562,18 @@ def _wg_check(args: argparse.Namespace) -> int:
         non_goals.extend([str(g) for g in spec_non if str(g).strip()])
     non_goals.extend([g.strip() for g in (args.non_goal or []) if g.strip()])
 
+    spec_pov = str(spec.get("pov")).strip() if isinstance(spec.get("pov"), str) else ""
+    pov_name = (str(args.pov).strip() if args.pov else spec_pov) or None
+    spec_pov_focus: list[str] = []
+    raw_spec_pov_focus = spec.get("pov_focus")
+    if isinstance(raw_spec_pov_focus, list):
+        spec_pov_focus.extend([str(p).strip() for p in raw_spec_pov_focus if str(p).strip()])
+    arg_pov_focus = _collect_text_values(list(args.pov_focus or []))
+    pov_focus = arg_pov_focus if arg_pov_focus else spec_pov_focus
+    pov_meta: dict[str, Any] | None = None
+    if pov_name:
+        pov_meta = {"name": pov_name, "focus": pov_focus}
+
     # Decide LLM enablement: CLI flag wins; otherwise use task spec.
     llm_enabled = bool(args.llm) if args.llm is not None else bool(spec.get("llm", False))
 
@@ -584,9 +643,14 @@ def _wg_check(args: argparse.Namespace) -> int:
             non_goals=non_goals,
             evidence=evidence_for_llm,
             screenshot_paths=screenshot_paths,
+            pov=pov_name,
+            pov_focus=pov_focus,
         )
+        resolved = llm_block.get("pov")
+        if isinstance(resolved, dict) and resolved:
+            pov_meta = resolved
 
-    report = build_report(run_meta=run_meta, pages=ev_pages, goals=goals, non_goals=non_goals, llm_block=llm_block)
+    report = build_report(run_meta=run_meta, pages=ev_pages, goals=goals, non_goals=non_goals, llm_block=llm_block, pov=pov_meta)
 
     report_json = out_dir / "report.json"
     report_md = out_dir / "report.md"

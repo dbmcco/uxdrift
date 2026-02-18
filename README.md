@@ -33,6 +33,9 @@ uxdrift run --url http://localhost:3000
 # Evidence + LLM critique (OpenAI-compatible; expects OPENAI_API_KEY in env/.env)
 uxdrift run --url http://localhost:3000 --llm
 
+# Evidence + LLM critique with Norman POV
+uxdrift run --url http://localhost:3000 --llm --pov doet-norman-v1
+
 # Run a small interaction flow (clicks, waits, extra screenshots)
 uxdrift run --url http://localhost:3000 --steps steps.json
 
@@ -82,12 +85,33 @@ pages = ["/"]
 steps = "path/to/steps.json"
 goals = ["No console errors", "No 404s"]
 non_goals = ["No branding review"]
+pov = "doet-norman-v1"
+pov_focus = ["discoverability", "feedback", "error_prevention_recovery"]
 llm = true
 llm_model = "gpt-4o-mini"
 ```
 ````
 
 Then you can omit `--url/--page/--steps/--llm` flags and `uxdrift` will use the task spec.
+
+### POV Packs
+
+`uxdrift` supports POV-guided critique for more consistent UX reasoning.
+
+Built-in pack:
+
+- `doet-norman-v1` (The Design of Everyday Things mindset)
+
+When POV is enabled, LLM findings are asked to include:
+
+- `principle_tags` per finding
+- `pov_scorecard` for principle-level scoring and rationale
+
+CLI override:
+
+```bash
+uxdrift wg check --task <id> --llm --pov doet-norman-v1 --pov-focus discoverability --pov-focus feedback
+```
 
 ## Config
 

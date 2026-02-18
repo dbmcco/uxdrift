@@ -15,6 +15,7 @@ class Finding(TypedDict, total=False):
     fix: str
     impact: str
     confidence: float
+    principle_tags: list[str]
 
 
 @dataclass(frozen=True)
@@ -35,4 +36,3 @@ class RunOptions:
 
 
 Json = dict[str, Any]
-

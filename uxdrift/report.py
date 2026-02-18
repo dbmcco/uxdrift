@@ -85,6 +85,18 @@ def render_markdown(report: dict[str, Any]) -> str:
         lines.append(f"- Channel: `{meta.get('browser_channel')}`")
     lines.append("")
 
+    pov = report.get("pov") or {}
+    if isinstance(pov, dict) and pov:
+        lines.append("## POV")
+        lines.append("")
+        pov_name = str(pov.get("name") or "").strip()
+        if pov_name:
+            lines.append(f"- Name: `{pov_name}`")
+        pov_focus = pov.get("focus")
+        if isinstance(pov_focus, list) and pov_focus:
+            lines.append(f"- Focus: `{', '.join([str(x) for x in pov_focus if str(x).strip()])}`")
+        lines.append("")
+
     findings = report.get("deterministic_findings", [])
     lines.append("## Deterministic Findings")
     lines.append("")
@@ -111,7 +123,30 @@ def render_markdown(report: dict[str, Any]) -> str:
                 sev = f.get("severity", "unknown")
                 cat = f.get("category", "unknown")
                 summary = f.get("summary", "")
-                lines.append(f"- [{sev}] {cat}: {summary}")
+                tags = f.get("principle_tags") or []
+                tag_text = ""
+                if isinstance(tags, list) and tags:
+                    clean = [str(t) for t in tags if str(t).strip()]
+                    if clean:
+                        tag_text = f" (principles: {', '.join(clean)})"
+                lines.append(f"- [{sev}] {cat}: {summary}{tag_text}")
+            lines.append("")
+        scorecard = critique.get("pov_scorecard") or []
+        if isinstance(scorecard, list) and scorecard:
+            lines.append("### POV Scorecard")
+            lines.append("")
+            for item in scorecard[:40]:
+                if not isinstance(item, dict):
+                    continue
+                principle = str(item.get("principle") or "").strip()
+                score = item.get("score")
+                rationale = str(item.get("rationale") or "").strip()
+                if not principle:
+                    continue
+                line = f"- `{principle}`: `{score}`"
+                if rationale:
+                    line += f" - {rationale}"
+                lines.append(line)
             lines.append("")
         ideas = critique.get("novel_ideas") or []
         if ideas:
@@ -161,6 +196,7 @@ def build_report(
     goals: list[str],
     non_goals: list[str],
     llm_block: dict[str, Any] | None,
+    pov: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     pages_json = []
     for p in pages:
@@ -185,6 +221,7 @@ def build_report(
         "meta": run_meta,
         "goals": goals,
         "non_goals": non_goals,
+        "pov": pov or {},
         "pages": pages_json,
         "deterministic_findings": det,
         "llm": llm_block or {"enabled": False},

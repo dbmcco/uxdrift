@@ -31,6 +31,7 @@
 - Decide what’s “bad UX” vs “acceptable tradeoff” given goals.
 - Rank improvements by impact vs effort.
 - Propose novel ideas and experiments.
+- Apply an explicit POV pack when provided (for example `doet-norman-v1`) so findings map to stable design principles.
 
 ## Report Schema (v1)
 
@@ -40,6 +41,22 @@ Single JSON report with:
 - evidence per page (artifacts + errors)
 - deterministic findings (console/network/page errors)
 - optional LLM critique (structured findings + ideas)
+- optional POV metadata + scorecard (`pov`, `pov_scorecard`, `principle_tags`)
+
+## POV Packs
+
+`uxdrift` can run model critique with a named design POV so reasoning is consistent across runs.
+
+Initial built-in pack:
+
+- `doet-norman-v1`:
+  - discoverability
+  - signifiers
+  - mapping
+  - feedback
+  - constraints
+  - conceptual model
+  - error prevention/recovery
 
 ## Workgraph Integration
 

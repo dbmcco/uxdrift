@@ -17,6 +17,8 @@ class TestWgSpec(unittest.TestCase):
             "url = \"http://localhost:3000\"\n"
             "pages = [\"/\", \"/settings\"]\n"
             "goals = [\"No console errors\"]\n"
+            "pov = \"doet-norman-v1\"\n"
+            "pov_focus = [\"discoverability\", \"feedback\"]\n"
             "llm = true\n"
             "```\n"
             "\nMore text\n"
@@ -28,5 +30,6 @@ class TestWgSpec(unittest.TestCase):
         self.assertEqual(spec["url"], "http://localhost:3000")
         self.assertEqual(spec["pages"], ["/", "/settings"])
         self.assertEqual(spec["goals"], ["No console errors"])
+        self.assertEqual(spec["pov"], "doet-norman-v1")
+        self.assertEqual(spec["pov_focus"], ["discoverability", "feedback"])
         self.assertEqual(spec["llm"], True)
-

@@ -34,3 +34,45 @@ class TestReportMarkdown(unittest.TestCase):
         self.assertIn("Deterministic Findings", md)
         self.assertIn("Pages", md)
 
+    def test_render_markdown_with_pov_and_scorecard(self) -> None:
+        pages = [
+            PageEvidence(
+                name="root",
+                url="http://example.com/",
+                artifacts={"screenshot": "/tmp/x.png"},
+                timing_ms={"navigation": 123},
+                console={"messages": [], "counts": {"error": 0, "warning": 0}},
+                network={"request_failures": [], "http_errors": [], "counts": {"request_failures": 0, "http_errors": 0}},
+                page_errors=[],
+                extracted={"title": "Example", "text": "Hello"},
+            )
+        ]
+        report = build_report(
+            run_meta={"base_url": "http://example.com", "browser": "chromium"},
+            pages=pages,
+            goals=["Test goal"],
+            non_goals=[],
+            pov={"name": "doet-norman-v1", "focus": ["discoverability", "feedback"]},
+            llm_block={
+                "enabled": True,
+                "parsed": {
+                    "findings": [
+                        {
+                            "severity": "medium",
+                            "category": "usability",
+                            "summary": "Checkout CTA is hard to find",
+                            "principle_tags": ["discoverability", "signifiers"],
+                        }
+                    ],
+                    "pov_scorecard": [
+                        {"principle": "discoverability", "score": 2, "rationale": "Primary action is visually weak"}
+                    ],
+                    "novel_ideas": [],
+                    "next_experiments": [],
+                },
+            },
+        )
+        md = render_markdown(report)
+        self.assertIn("## POV", md)
+        self.assertIn("POV Scorecard", md)
+        self.assertIn("discoverability", md)
