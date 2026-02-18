@@ -73,6 +73,29 @@ uxdrift wg check --url http://localhost:3000 --write-log
 
 Default outputs go to `.workgraph/.uxdrift/runs/<timestamp>/<task_id>/`.
 
+### Recommended In Speedrift (Canonical Path)
+
+In Speedrift-managed repos, prefer running through the unified drifts entrypoint:
+
+```bash
+./.workgraph/drifts check --task <task_id> --write-log --create-followups
+```
+
+For UX-focused tasks, add an `uxdrift` fence to the Workgraph task description so the lane has explicit goals and POV:
+
+````md
+```uxdrift
+schema = 1
+url = "http://localhost:3000"
+pages = ["/", "/checkout"]
+llm = true
+pov = "doet-norman-v1"
+pov_focus = ["discoverability", "feedback", "error_prevention_recovery"]
+```
+````
+
+This keeps one control loop (`driftdriver`) while still giving `uxdrift` strong design reasoning context.
+
 ### Optional per-task spec
 
 In a task description, add:
