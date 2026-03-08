@@ -11,6 +11,7 @@ requires-python = ">=3.12"
 dependencies = [
   "httpx>=0.27.0",
   "playwright>=1.58.0",
+  "speedrift-lane-sdk",
 ]
 
 [project.scripts]
@@ -19,3 +20,11 @@ uxdrift = "uxdrift.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["uxdrift*"]
+
+[tool.uv.sources]
+speedrift-lane-sdk = { path = "../speedrift-lane-sdk", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
