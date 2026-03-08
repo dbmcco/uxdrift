@@ -145,3 +145,31 @@ For now, the CLI is flag-driven. The next step is a `uxdrift.toml` profile forma
 - Secrets live in `.env` (gitignored).
 - `uxdrift run` is read-only with respect to the target app (it only writes local artifacts).
 - `uxdrift wg check --write-log/--create-followups` will write to Workgraph via `wg` and will create artifacts under `.workgraph/.uxdrift/`.
+
+## Agent Guidance
+
+This section is for AI agents (Claude Code, Codex, Amplifier) working in Speedrift-managed repos.
+
+### When This Lane Runs
+
+`uxdrift` runs when a task description contains a fenced `uxdrift` TOML block, or when invoked explicitly with `--with-uxdrift` during driftdriver install. It is also triggered during factory cycles and attractor loop passes for repos with UI components.
+
+### Per-Task Workflow
+
+1. Add a `uxdrift` fence to task descriptions that touch UI/UX code, specifying the target URL and pages
+2. Run drift checks at task start and before completion:
+   ```bash
+   ./.workgraph/drifts check --task <id> --write-log --create-followups
+   ```
+3. Drift is advisory — never hard-block the current task
+4. If UX findings appear, prefer follow-up tasks over scope expansion
+5. For LLM-powered critique, ensure `OPENAI_API_KEY` is set in `.env`
+
+### Key Rules
+
+- Exit code `0` = clean, `3` = findings exist (advisory)
+- Follow-up tasks are deduped and capped at 3 per lane per repo
+- uxdrift is read-only with respect to the target app — it only writes local artifacts
+- Screenshots and evidence land in `.uxdrift/runs/<timestamp>/` or `.workgraph/.uxdrift/`
+- Use POV packs (e.g., `doet-norman-v1`) for design-principle-grounded critique
+- Do not suppress findings — let driftdriver manage significance scoring
