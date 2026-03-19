@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from uxdrift.playwright_runner import PageEvidence
+from uxdrift.types import PageEvidence
 
 
 def _utc_now_iso() -> str:

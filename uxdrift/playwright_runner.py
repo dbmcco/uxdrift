@@ -1,29 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 import time
-from typing import Any, Literal
+from typing import Any, Literal, TYPE_CHECKING
 
-from playwright.sync_api import ConsoleMessage, Page, Response, sync_playwright
+from uxdrift.types import PageEvidence
 
+if TYPE_CHECKING:
+    from playwright.sync_api import ConsoleMessage, Page, Response
 
 _NEXT_DEV_OVERLAY_CSS = """
 nextjs-portal { pointer-events: none !important; }
 [data-nextjs-dev-overlay="true"] { pointer-events: none !important; }
 """
-
-
-@dataclass(frozen=True)
-class PageEvidence:
-    name: str
-    url: str
-    artifacts: dict[str, Any]
-    timing_ms: dict[str, int]
-    console: dict[str, Any]
-    network: dict[str, Any]
-    page_errors: list[str]
-    extracted: dict[str, Any]
 
 
 def _safe_int(v: float) -> int:
@@ -182,6 +171,8 @@ def capture_pages(
     wait_until: Literal["load", "domcontentloaded", "networkidle"],
     steps: list[dict[str, Any]] | None = None,
 ) -> tuple[list[PageEvidence], dict[str, Any]]:
+    from playwright.sync_api import sync_playwright  # lazy — keeps import-time playwright-free
+
     out_dir.mkdir(parents=True, exist_ok=True)
 
     started = time.time()

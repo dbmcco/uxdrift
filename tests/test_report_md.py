@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from uxdrift.playwright_runner import PageEvidence
+from uxdrift.types import PageEvidence
 from uxdrift.report import build_report, render_markdown
 
 

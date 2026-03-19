@@ -7,6 +7,18 @@ from typing import Any, Literal, TypedDict
 Severity = Literal["blocker", "high", "medium", "low", "info"]
 
 
+@dataclass(frozen=True)
+class PageEvidence:
+    name: str
+    url: str
+    artifacts: dict[str, Any]
+    timing_ms: dict[str, int]
+    console: dict[str, Any]
+    network: dict[str, Any]
+    page_errors: list[str]
+    extracted: dict[str, Any]
+
+
 class Finding(TypedDict, total=False):
     severity: Severity
     category: str
