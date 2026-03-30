@@ -16,3 +16,4 @@ __pycache__/
 # Tool outputs
 .uxdrift/
 .workgraph
+.playwright-mcp/

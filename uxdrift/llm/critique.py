@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from uxdrift.llm.openai_compat import chat_completions, extract_text
 from uxdrift.llm.parse import parse_json_object
@@ -44,7 +45,7 @@ def critique(
     return {
         "enabled": True,
         "provider": "openai_compat",
-        "base_url": base_url,
+        "base_url": urlparse(base_url).netloc or urlparse(base_url).path,
         "model": model,
         "raw_text": text,
         "parsed": parsed,
