@@ -12,6 +12,11 @@ from typing import Any, Literal
 from uxdrift.env import load_default_dotenv
 from uxdrift.github import create_issue
 from uxdrift.llm.critique import critique as llm_critique
+from uxdrift.model_routes import (
+    LLM_CRITIQUE_ROUTE,
+    base_url_for_env_or_route,
+    model_for_env_or_route,
+)
 from uxdrift.playwright_runner import capture_pages
 from uxdrift.report import build_report, render_markdown, write_json, write_text
 from uxdrift.workgraph import choose_task_id, find_workgraph_dir, load_workgraph
@@ -48,8 +53,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     run.add_argument("--pov", help="Reasoning POV pack (e.g. doet-norman-v1)")
     run.add_argument("--pov-focus", action="append", default=[], help="POV principle id to emphasize (repeatable)")
     run.add_argument("--llm", action="store_true", help="Enable LLM critique (OpenAI-compatible)")
-    run.add_argument("--llm-base-url", default=os.environ.get("UXDRIFT_LLM_BASE_URL", "https://api.openai.com/v1"))
-    run.add_argument("--llm-model", default=os.environ.get("UXDRIFT_LLM_MODEL", "gpt-4o-mini"))
+    run.add_argument("--llm-base-url", default=base_url_for_env_or_route("UXDRIFT_LLM_BASE_URL", LLM_CRITIQUE_ROUTE))
+    run.add_argument("--llm-model", default=model_for_env_or_route("UXDRIFT_LLM_MODEL", LLM_CRITIQUE_ROUTE))
     run.add_argument("--github-repo", help="Target repo for follow-up issues (e.g. dbmcco/paia-os)")
     run.add_argument("--create-issues", action="store_true", help="Create GitHub issues for notable findings")
     run.add_argument(
@@ -89,8 +94,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         default=None,
         help="Enable LLM critique (overrides task spec if present)",
     )
-    wg_check.add_argument("--llm-base-url", default=os.environ.get("UXDRIFT_LLM_BASE_URL", "https://api.openai.com/v1"))
-    wg_check.add_argument("--llm-model", default=os.environ.get("UXDRIFT_LLM_MODEL", "gpt-4o-mini"))
+    wg_check.add_argument("--llm-base-url", default=base_url_for_env_or_route("UXDRIFT_LLM_BASE_URL", LLM_CRITIQUE_ROUTE))
+    wg_check.add_argument("--llm-model", default=model_for_env_or_route("UXDRIFT_LLM_MODEL", LLM_CRITIQUE_ROUTE))
     wg_check.add_argument("--write-log", action="store_true", help="Write a one-line summary to wg log")
     wg_check.add_argument("--create-followups", action="store_true", help="Create a deterministic ux follow-up task")
     wg_check.add_argument(

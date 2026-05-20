@@ -111,7 +111,6 @@ non_goals = ["No branding review"]
 pov = "doet-norman-v1"
 pov_focus = ["discoverability", "feedback", "error_prevention_recovery"]
 llm = true
-llm_model = "gpt-4o-mini"
 ```
 ````
 
